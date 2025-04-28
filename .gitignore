@@ -1,0 +1,40 @@
+# Ignore video files
+*.mp4
+*.avi
+*.mkv
+*.mov
+*.flv
+*.wmv
+
+
+# Ignore video folders
+input_videos/
+output_videos/
+
+
+# Ignore model files (if applicable)
+models/*.pt
+models/*.onnx
+*.pt
+
+# Ignore temporary or cache files
+*.tmp
+*.log
+*.cache
+
+# Ignore Python bytecode
+__pycache__/
+*.pyc
+*.pyo
+
+# Ignore Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Ignore system files
+.DS_Store
+Thumbs.db
+
+
+# Ignore model weights
+*.pt
+*.pth
