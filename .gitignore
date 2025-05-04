@@ -38,3 +38,12 @@ Thumbs.db
 # Ignore model weights
 *.pt
 *.pth
+
+myenv/
+*.pyc
+__pycache__/
+*.pkl
+*.h5
+*.pt
+*.pth
+.DS_Store
