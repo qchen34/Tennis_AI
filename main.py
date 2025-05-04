@@ -11,6 +11,10 @@ from trackers import PlayerTracker, BallTracker
 from court_line_detector import CourtLineDetector
 from mini_court import MiniCourt
 import cv2
+from video_cut import VideoCut
+from utils.audio_utils import AudioProcessor
+import matplotlib.pyplot as plt
+import librosa.display
 
 
 def main():
@@ -18,7 +22,7 @@ def main():
     
     # Read Video
     print("1. 开始读取视频...")
-    input_video_path = "input/tennis_match_hardcourt_short.mp4"
+    input_video_path = "input/tennis_match_video1.mp4"
     video_frames, fps = read_video(input_video_path)
     print(f"视频读取完成，共{len(video_frames)}帧")
 
@@ -26,24 +30,31 @@ def main():
     print("2. 初始化球员跟踪器...")
     player_tracker = PlayerTracker(model_path="models/yolov8x.pt")
     print("3. 初始化球跟踪器...")
-    ball_tracker = BallTracker(model_path='models/yolo9_best.pt')
+    ball_tracker = BallTracker(model_path='models/yolo9_best_1.pt')
     
     print("4. 开始检测球员...")
     player_detections = player_tracker.detect_frames(video_frames, 
-                                                    read_from_stub=False, 
+                                                    read_from_stub=True, 
                                                     stub_path="tracker_stubs/player_detections.pkl")
     print(f"球员检测完成，检测到{len(player_detections)}帧的球员")
 
+    # 打印每帧中检测到的球员 ID
+    # print("检测到的球员 ID:")
+    # for frame_idx, player_dict in enumerate(player_detections):
+    #     player_ids = list(player_dict.keys())
+    #     print(f"Frame {frame_idx}: Detected player IDs: {player_ids}")
+
+
     print("5. 开始检测球...")
     ball_detections = ball_tracker.detect_frames(video_frames, 
-                                                read_from_stub=False, 
+                                                read_from_stub=True, 
                                                 stub_path="tracker_stubs/ball_detections.pkl")
     print(f"球检测完成，检测到{len(ball_detections)}帧的球")
     
     print("6. 开始插值球的位置...")
     ball_detections = ball_tracker.interpolate_ball_positions(ball_detections)
     print("球位置插值完成")
-    
+
     # Court Line Detector model
     print("7. 初始化球场检测器...")
     court_model_path = "models/keypoints_model.pth"
@@ -52,9 +63,27 @@ def main():
     court_keypoints = court_line_detector.predict(video_frames[0])
     print(f"球场关键点检测完成，检测到{len(court_keypoints)}个关键点")
 
+    print("Court keypoints:", court_keypoints)
+
     print("9. 开始选择和过滤球员...")
-    player_detections = player_tracker.choose_and_filter_players(court_keypoints, player_detections)
+    player_detections_filtered = player_tracker.choose_and_filter_players(court_keypoints, player_detections)
     print(f"球员选择和过滤完成，剩余{len(player_detections)}帧的球员数据")
+
+    # 调用 match_players 函数
+    # tracked_players = player_tracker.match_players(video_frames[0], player_detections[0])
+    
+    # 打印每个球员 ID 和绑定的颜色特征
+    # print("\n检测到的球员 ID 和绑定颜色特征:")
+    # for player_id, bbox in tracked_players:
+    #     hist = player_tracker.players[player_id]  # 获取绑定的颜色直方图
+    #     print(f"Player ID: {player_id}, BBox: {bbox}, Color Histogram (first 5 bins): {hist.flatten()[:5]}")
+
+    #打印每帧中检测到的球员 ID
+    # print("检测到的球员 ID:")
+    # for frame_idx, player_dict in enumerate(player_detections_filtered):
+    #    player_ids = list(player_dict.keys())
+    #    print(f"Frame {frame_idx}: Detected player IDs: {player_ids}")
+    
 
     # Mini Court
     print("10. 初始化迷你球场...")
@@ -65,8 +94,18 @@ def main():
     ball_shot_frames = ball_tracker.get_ball_shot_frames(ball_detections)
     print(f"击球帧检测完成: {ball_shot_frames}")
 
+    # 打印 player_detections 的前几个数据
+    print("\nPlayer detections (first 5 frames):")
+    for i, detection in enumerate(player_detections_filtered[:5]):
+        print(f"Frame {i}: {detection}")
+
+    # 打印 player_detections 的前几个数据
+    print("\nPlayer detections (first 5 frames):")
+    for i, detection in enumerate(player_detections[:5]):
+        print(f"Frame {i}: {detection}")
+
     # Convert positions to mini court positions
-    player_mini_court_detections, ball_mini_court_detections = mini_court.convert_bounding_boxes_to_mini_court_coordinates(player_detections, ball_detections, court_keypoints)
+    player_mini_court_detections, ball_mini_court_detections = mini_court.convert_bounding_boxes_to_mini_court_coordinates(player_detections_filtered, ball_detections, court_keypoints)
 
     # 计算球员统计数据
     player_stats_data_df = compute_player_stats(
@@ -77,12 +116,12 @@ def main():
         len(video_frames),
         fps = fps
     )
-
+    
     # Draw output
     print("12. 开始绘制输出...")
     # Draw output
     ## Draw Player Bounding Boxes
-    output_video_frames= player_tracker.draw_bboxes(video_frames, player_detections)
+    output_video_frames= player_tracker.draw_bboxes(video_frames, player_detections_filtered)
     output_video_frames= ball_tracker.draw_bboxes(output_video_frames, ball_detections)
 
     ## Draw court Keypoints
@@ -98,12 +137,56 @@ def main():
 
     ## Draw frame number on top left corner
     for i, frame in enumerate(output_video_frames):
-        cv2.putText(frame, f"Frame: {i}",(10,30),cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+       cv2.putText(frame, f"Frame: {i}",(10,30),cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
+    
+
+
+    
     # Save video
     print("13. 开始保存视频...")
     save_video(output_video_frames, "output_videos/output_video.avi")
     print("14. 所有处理完成！")
+
+    """
+    # 打印 player_detections 的前几个数据
+    print("\nPlayer detections (first 5 frames):")
+    for i, detection in enumerate(player_detections[:5]):
+        print(f"Frame {i}: {detection}")
+    
+    print("\nBall detections (first 5 frames):")
+    for i, detection in enumerate(ball_detections[:5]):
+        print(f"Frame {i}: {detection}")
+    """
+
+
+    # 初始化 VideoCut 类
+    video_cutter = VideoCut(
+        ball_detections=ball_detections,
+        ball_shot_frames=ball_shot_frames,
+        acceleration_threshold=50.0,  # 加速度阈值
+        frame_merge_threshold=10      # 帧数合并阈值
+    )
+
+    # 调用 refine_hit_points 函数
+    refined_hit_points = video_cutter.refine_hit_points()
+    # refined_hit_points = ball_shot_frames
+
+    # 打印优化后的击球点
+    print("Refined hit points (frames):", refined_hit_points)
+
+    # 调用 generate_rallies 函数
+    rallies = video_cutter.generate_rallies(refined_hit_points, max_frame_gap=240, buffer_frames=120)
+
+    # 打印每个 rally 的信息
+    print("\nGenerated rallies:")
+    for i, rally in enumerate(rallies):
+        print(f"Rally {i + 1}: Start Frame = {rally['start_frame']}, End Frame = {rally['end_frame']}, Hit Points = {rally['hit_points']}")
+
+    # 保存 rallies 为独立视频
+    output_folder = "output_videos/output_rallies"  # 输出文件夹路径
+    video_cutter.save_rallies_as_videos("output_videos/output_video.avi", rallies, output_folder)
+    print(f"\nRallies saved to folder: {output_folder}")
 
 if __name__ == "__main__":
     main()

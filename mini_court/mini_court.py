@@ -186,60 +186,121 @@ class MiniCourt():
 
         return  mini_court_player_position
 
-    def convert_bounding_boxes_to_mini_court_coordinates(self,player_boxes, ball_boxes, original_court_key_points ):
+    def convert_bounding_boxes_to_mini_court_coordinates(self, player_boxes, ball_boxes, original_court_key_points):
+        """
+        将球员和球的边界框转换为迷你球场坐标。
+        :param player_boxes: 当前帧的球员边界框字典，键为球员 ID，值为 [x1, y1, x2, y2]。
+        :param ball_boxes: 当前帧的球边界框字典，键为球 ID，值为 [x1, y1, x2, y2]。
+        :param original_court_key_points: 球场关键点。
+        :return: 转换后的迷你球场坐标。
+        """
         player_heights = {
             1: constants.PLAYER_1_HEIGHT_METERS,
             2: constants.PLAYER_2_HEIGHT_METERS
         }
 
-        output_player_boxes= []
-        output_ball_boxes= []
+        output_player_boxes = []
+        output_ball_boxes = []
+
+        empty_count = 0    # 空帧计数
 
         for frame_num, player_bbox in enumerate(player_boxes):
+            # 检查 player_bbox 是否为空
+            if not player_bbox:
+                empty_count += 1
+                output_player_boxes.append({})
+                output_ball_boxes.append({})
+                continue
+
+            # 检查 ball_boxes 是否为空或无效
+            if frame_num >= len(ball_boxes) or not ball_boxes[frame_num] or 1 not in ball_boxes[frame_num]:
+                print(f"Warning: Frame {frame_num} - ball_boxes is empty or invalid. Skipping this frame.")
+                output_player_boxes.append({})
+                output_ball_boxes.append({})
+                continue
+
             ball_box = ball_boxes[frame_num][1]
             ball_position = get_center_of_bbox(ball_box)
-            closest_player_id_to_ball = min(player_bbox.keys(), key=lambda x: measure_distance(ball_position, get_center_of_bbox(player_bbox[x])))
+
+            # 检查 ball_position 是否有效
+            if not ball_position:
+                print(f"Warning: Frame {frame_num} - ball_position is invalid. Skipping this frame.")
+                output_player_boxes.append({})
+                output_ball_boxes.append({})
+                continue
+
+            # 找到离球最近的球员 ID
+            try:
+                closest_player_id_to_ball = min(
+                    player_bbox.keys(),
+                    key=lambda x: measure_distance(ball_position, get_center_of_bbox(player_bbox[x]))
+                )
+            except ValueError as e:
+                print(f"Error: Frame {frame_num} - Unable to find closest player to ball. Details: {e}")
+                output_player_boxes.append({})
+                output_ball_boxes.append({})
+                continue
 
             output_player_bboxes_dict = {}
             for player_id, bbox in player_bbox.items():
                 foot_position = get_foot_position(bbox)
 
-                # Get The closest keypoint in pixels
-                closest_key_point_index = get_closest_keypoint_index(foot_position,original_court_key_points, [0,2,12,13])
-                closest_key_point = (original_court_key_points[closest_key_point_index*2], 
-                                     original_court_key_points[closest_key_point_index*2+1])
+                # 获取最近的关键点
+                closest_key_point_index = get_closest_keypoint_index(foot_position, original_court_key_points, [0, 2, 12, 13])
+                closest_key_point = (
+                    original_court_key_points[closest_key_point_index * 2],
+                    original_court_key_points[closest_key_point_index * 2 + 1]
+                )
 
-                # Get Player height in pixels
-                frame_index_min = max(0, frame_num-20)
-                frame_index_max = min(len(player_boxes), frame_num+50)
-                bboxes_heights_in_pixels = [get_height_of_bbox(player_boxes[i][player_id]) for i in range (frame_index_min,frame_index_max)]
-                max_player_height_in_pixels = max(bboxes_heights_in_pixels)
+                # 获取球员高度（像素）
+                frame_index_min = max(0, frame_num - 20)
+                frame_index_max = min(len(player_boxes), frame_num + 50)
+                try:
+                    bboxes_heights_in_pixels = [
+                        get_height_of_bbox(player_boxes[i][player_id])
+                        for i in range(frame_index_min, frame_index_max)
+                        if player_id in player_boxes[i]
+                    ]
+                    max_player_height_in_pixels = max(bboxes_heights_in_pixels)
+                except ValueError:
+                    print(f"Warning: Frame {frame_num} - Unable to calculate player height for player {player_id}.")
+                    max_player_height_in_pixels = 0
 
-                mini_court_player_position = self.get_mini_court_coordinates(foot_position,
-                                                                            closest_key_point, 
-                                                                            closest_key_point_index, 
-                                                                            max_player_height_in_pixels,
-                                                                            player_heights[player_id]
-                                                                            )
-                
+                mini_court_player_position = self.get_mini_court_coordinates(
+                    foot_position,
+                    closest_key_point,
+                    closest_key_point_index,
+                    max_player_height_in_pixels,
+                    player_heights.get(player_id, 1.8)  # 默认高度为 1.8 米
+                )
+
                 output_player_bboxes_dict[player_id] = mini_court_player_position
 
+                # 如果是离球最近的球员，计算球的迷你球场坐标
                 if closest_player_id_to_ball == player_id:
-                    # Get The closest keypoint in pixels
-                    closest_key_point_index = get_closest_keypoint_index(ball_position,original_court_key_points, [0,2,12,13])
-                    closest_key_point = (original_court_key_points[closest_key_point_index*2], 
-                                        original_court_key_points[closest_key_point_index*2+1])
-                    
-                    mini_court_player_position = self.get_mini_court_coordinates(ball_position,
-                                                                            closest_key_point, 
-                                                                            closest_key_point_index, 
-                                                                            max_player_height_in_pixels,
-                                                                            player_heights[player_id]
-                                                                            )
-                    output_ball_boxes.append({1:mini_court_player_position})
+                    closest_key_point_index = get_closest_keypoint_index(ball_position, original_court_key_points, [0, 2, 12, 13])
+                    closest_key_point = (
+                        original_court_key_points[closest_key_point_index * 2],
+                        original_court_key_points[closest_key_point_index * 2 + 1]
+                    )
+
+                    mini_court_ball_position = self.get_mini_court_coordinates(
+                        ball_position,
+                        closest_key_point,
+                        closest_key_point_index,
+                        max_player_height_in_pixels,
+                        player_heights.get(player_id, 1.8)
+                    )
+                    output_ball_boxes.append({1: mini_court_ball_position})
+
             output_player_boxes.append(output_player_bboxes_dict)
 
-        return output_player_boxes , output_ball_boxes
+        if empty_count == len(player_boxes):
+            print("Error: 所有帧的player_bbox都为空，请检查上游检测或过滤逻辑！")
+        elif empty_count > 0:
+            print(f"Warning: 有{empty_count}帧player_bbox为空。")
+
+        return output_player_boxes, output_ball_boxes
     
     def draw_points_on_mini_court(self,frames,postions, color=(0,255,0)):
         for frame_num, frame in enumerate(frames):

@@ -32,11 +32,30 @@ def compute_player_stats(ball_shot_frames, ball_mini_court_detections, player_mi
     for ball_shot_ind in range(len(ball_shot_frames)-1):
         start_frame = ball_shot_frames[ball_shot_ind]
         end_frame = ball_shot_frames[ball_shot_ind+1]
+
+                # 检查数据有效性
+        if (start_frame >= len(ball_mini_court_detections) or 
+            end_frame >= len(ball_mini_court_detections) or
+            not ball_mini_court_detections[start_frame] or 
+            not ball_mini_court_detections[end_frame] or
+            1 not in ball_mini_court_detections[start_frame] or
+            1 not in ball_mini_court_detections[end_frame]):
+            print(f"Warning: 帧 {start_frame} 到 {end_frame} 的球位置数据无效，跳过此击球")
+            continue
+
+
+
         ball_shot_time_in_seconds = (end_frame-start_frame)/fps # 24fps
 
         # Get distance covered by the ball
-        distance_covered_by_ball_pixels = measure_distance(ball_mini_court_detections[start_frame][1],
-                                                           ball_mini_court_detections[end_frame][1])
+        try:
+            distance_covered_by_ball_pixels = measure_distance(
+                ball_mini_court_detections[start_frame][1],
+                ball_mini_court_detections[end_frame][1]
+            )
+        except (KeyError, IndexError) as e:
+            print(f"Error: 计算球距时出错，帧 {start_frame}-{end_frame}: {e}")
+            continue
         distance_covered_by_ball_meters = convert_pixel_distance_to_meters(
             distance_covered_by_ball_pixels,
             constants.DOUBLE_LINE_WIDTH,
