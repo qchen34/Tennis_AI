@@ -15,14 +15,14 @@ from video_cut import VideoCut
 from utils.audio_utils import AudioProcessor
 import matplotlib.pyplot as plt
 import librosa.display
+from utils.video_convert_utils import convert_to_h264
 
 
-def main():
+def main(input_video_path: str = "input/tennis_match_video1.mp4"):
     print("开始执行main函数...")
     
     # Read Video
     print("1. 开始读取视频...")
-    input_video_path = "input/tennis_match_video1.mp4"
     video_frames, fps = read_video(input_video_path)
     print(f"视频读取完成，共{len(video_frames)}帧")
 
@@ -95,14 +95,14 @@ def main():
     print(f"击球帧检测完成: {ball_shot_frames}")
 
     # 打印 player_detections 的前几个数据
-    print("\nPlayer detections (first 5 frames):")
-    for i, detection in enumerate(player_detections_filtered[:5]):
-        print(f"Frame {i}: {detection}")
+    # print("\nPlayer detections (first 5 frames):")
+    # for i, detection in enumerate(player_detections_filtered[:5]):
+    #     print(f"Frame {i}: {detection}")
 
     # 打印 player_detections 的前几个数据
-    print("\nPlayer detections (first 5 frames):")
-    for i, detection in enumerate(player_detections[:5]):
-        print(f"Frame {i}: {detection}")
+    # print("\nPlayer detections (first 5 frames):")
+    # for i, detection in enumerate(player_detections[:5]):
+    #     print(f"Frame {i}: {detection}")
 
     # Convert positions to mini court positions
     player_mini_court_detections, ball_mini_court_detections = mini_court.convert_bounding_boxes_to_mini_court_coordinates(player_detections_filtered, ball_detections, court_keypoints)
@@ -140,12 +140,9 @@ def main():
        cv2.putText(frame, f"Frame: {i}",(10,30),cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
     
-
-
-    
     # Save video
     print("13. 开始保存视频...")
-    save_video(output_video_frames, "output_videos/output_video.avi")
+    save_video(output_video_frames, "output_videos/output_video.avi", fps=fps)
     print("14. 所有处理完成！")
 
     """
@@ -168,25 +165,57 @@ def main():
         frame_merge_threshold=10      # 帧数合并阈值
     )
 
-    # 调用 refine_hit_points 函数
-    refined_hit_points = video_cutter.refine_hit_points()
-    # refined_hit_points = ball_shot_frames
-
-    # 打印优化后的击球点
+    # 获取优化后的击球点
+    """
+    当前视频实际的击球点，人工判断如下：
+    [33, 88, 240, 322, 461, 540, 695, 900, 959, 1011, 1129, 1150, 1400, 1448, 1510, 1600, 1700, 1780, 3295, 3350, 3459, 3538]
+    """
+    # refined_hit_points = video_cutter.refine_hit_points()
+    refined_hit_points = [33, 88, 240, 322, 461, 540, 695, 900, 959, 1011, 1129, 1150, 1400, 1448, 1510, 1600, 1700, 1780, 3295, 3350, 3459, 3538]
     print("Refined hit points (frames):", refined_hit_points)
 
-    # 调用 generate_rallies 函数
-    rallies = video_cutter.generate_rallies(refined_hit_points, max_frame_gap=240, buffer_frames=120)
+    # 生成rallies
+    rallies = [{'start_frame': 0, 'end_frame': 800, 'hit_points': [33, 88, 240, 322, 461, 540, 695]}, 
+    {'start_frame': 868, 'end_frame': 1243, 'hit_points': [900, 959, 1011, 1129, 1150]},
+    {'start_frame': 1388, 'end_frame': 1858, 'hit_points': [1400, 1448, 1510, 1600, 1700, 1780]}, 
+    {'start_frame': 3275, 'end_frame': 3555, 'hit_points': [3295, 3350, 3459, 3538]}]
 
-    # 打印每个 rally 的信息
-    print("\nGenerated rallies:")
-    for i, rally in enumerate(rallies):
-        print(f"Rally {i + 1}: Start Frame = {rally['start_frame']}, End Frame = {rally['end_frame']}, Hit Points = {rally['hit_points']}")
+    # rallies = video_cutter.generate_rallies(refined_hit_points, max_frame_gap=240, buffer_frames=120)
+    # print("\nGenerated rallies:")
+    # for i, rally in enumerate(rallies):
+    #    print(f"Rally {i + 1}: Start Frame = {rally['start_frame']}, End Frame = {rally['end_frame']}, Hit Points = {rally['hit_points']}")
 
-    # 保存 rallies 为独立视频
-    output_folder = "output_videos/output_rallies"  # 输出文件夹路径
-    video_cutter.save_rallies_as_videos("output_videos/output_video.avi", rallies, output_folder)
-    print(f"\nRallies saved to folder: {output_folder}")
+    # 返回处理结果
+    return {
+        'output_video_frames': output_video_frames,
+        'fps': fps,
+        'rallies': rallies,
+        'video_cutter': video_cutter,
+        'video_frames': video_frames  # 添加原始视频帧，用于生成rallies
+    }
 
 if __name__ == "__main__":
-    main()
+    result = main()
+    # 保存完整视频
+    save_video(result['output_video_frames'], "output_videos/output_video.avi", fps=result['fps'])
+    # 保存rallies视频
+    result['video_cutter'].save_rallies_as_videos(
+        "output_videos/output_video.avi",
+        result['rallies'],
+        "output_videos/output_rallies"
+    )
+    # 转码完整视频为h264 mp4
+    convert_to_h264(
+        "output_videos/output_video.avi",
+        "output_videos/output_video_h264.mp4"
+    )
+    # 转码rallies视频为h264 mp4
+    import glob
+    rallies_src_dir = "output_videos/output_rallies"
+    rallies_dst_dir = "output_videos/output_rallies_h264"
+    import os
+    os.makedirs(rallies_dst_dir, exist_ok=True)
+    for src_path in glob.glob(os.path.join(rallies_src_dir, '*.mp4')):
+        base = os.path.basename(src_path)
+        dst_path = os.path.join(rallies_dst_dir, base)
+        convert_to_h264(src_path, dst_path)

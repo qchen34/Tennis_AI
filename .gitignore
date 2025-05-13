@@ -47,3 +47,11 @@ __pycache__/
 *.pt
 *.pth
 .DS_Store
+*.acc
+*.wav
+*.mp3
+*.m4a
+*.aac
+*.ogg
+*.flac
+*.wav

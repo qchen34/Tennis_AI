@@ -65,7 +65,7 @@ class VideoCut:
                 
                 # 计算加速度
                 acceleration = velocities[frame] - velocities[frame-1]
-                
+
                 # 判断是否满足击球条件
                 if abs(acceleration) > dynamic_threshold:
                     refined_hit_points.append(frame)

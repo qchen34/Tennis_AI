@@ -189,8 +189,8 @@ class PlayerTracker:
                 player_bindings[2] = closest_to_baseline2["player_id"]
 
             # 打印当前帧的绑定信息
-            print(f"  Player 1 (closest to baseline 1): ID {player_bindings[1]}, Distance = {closest_to_baseline1['distance']:.2f} m")
-            print(f"  Player 2 (closest to baseline 2): ID {player_bindings[2]}, Distance = {closest_to_baseline2['distance']:.2f} m")
+            # print(f"  Player 1 (closest to baseline 1): ID {player_bindings[1]}, Distance = {closest_to_baseline1['distance']:.2f} m")
+            # print(f"  Player 2 (closest to baseline 2): ID {player_bindings[2]}, Distance = {closest_to_baseline2['distance']:.2f} m")
 
             # 构造当前帧的 Player 1 和 Player 2 的检测结果
             frame_detection = {}
